@@ -9,12 +9,7 @@ import (
 	"strings"
 )
 
-type Table struct {
-	Name    string
-	Comment string
-}
-
-type Column struct {
+type column struct {
 	ColumnName string
 	Type       string
 	Nullable   string
@@ -23,8 +18,9 @@ type Column struct {
 
 var db *sql.DB
 
-var typeMappingMysql = map[string]string{
-	"int":                "int", // int signed
+//map for converting mysql type to golang types
+var go_mysql_typemap = map[string]string{
+	"int":                "int",
 	"integer":            "int",
 	"tinyint":            "int",
 	"smallint":           "int",
@@ -77,12 +73,13 @@ func main() {
 		}
 	}
 
-	translate(*table_name)
+	generateModel(*table_name)
 
 }
 
-func translate(table_name string) {
-	err, columns := GetColumns(table_name)
+//function for generating golang struct
+func generateModel(table_name string) {
+	err, columns := getColumns(table_name)
 	if err != nil {
 		return
 	}
@@ -97,7 +94,8 @@ func translate(table_name string) {
 	fmt.Print(tab(depth-1) + "}\n")
 }
 
-func GetColumns(table string) (errr error, columns []Column) {
+// Function for fetching schema definition of passed table
+func getColumns(table string) (errr error, columns []column) {
 	rows, err := db.Query(`
 		SELECT COLUMN_NAME,DATA_TYPE, IS_NULLABLE
 		FROM information_schema.COLUMNS 
@@ -110,7 +108,7 @@ func GetColumns(table string) (errr error, columns []Column) {
 	defer rows.Close()
 
 	for rows.Next() {
-		col := Column{}
+		col := column{}
 		err := rows.Scan(&col.ColumnName, &col.Type, &col.Nullable)
 
 		if err != nil {
@@ -120,7 +118,7 @@ func GetColumns(table string) (errr error, columns []Column) {
 
 		col.Json = strings.ToLower(col.ColumnName)
 		col.ColumnName = camelCase(col.ColumnName)
-		col.Type = typeMappingMysql[col.Type]
+		col.Type = go_mysql_typemap[col.Type]
 		if col.Nullable == "YES" {
 			col.Json = fmt.Sprintf("`json:\"%s,omitempty\"`", col.Json)
 		} else {
